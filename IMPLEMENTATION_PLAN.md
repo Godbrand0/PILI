@@ -85,57 +85,56 @@ A Uniswap v4 hook that automatically protects liquidity providers from impermane
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     Frontend (Next.js)                      │
-│  ┌─────────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │  LP Dashboard   │  │  FHE Client  │  │ Wallet Conn  │  │
-│  └─────────────────┘  └──────────────┘  └──────────────┘  │
+│  ┌─────────────────┐  ┌──────────────┐  ┌──────────────┐    │
+│  │  LP Dashboard   │  │  FHE Client  │  │ Wallet Conn  │    │
+│  └─────────────────┘  └──────────────┘  └──────────────┘    │
 └───────────────────────────┬─────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              Blockchain Layer (Uniswap v4)                  │
 │                                                             │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │          ILProtectionHook.sol                       │   │
-│  │                                                     │   │
-│  │  ┌──────────────────┐  ┌──────────────────┐      │   │
-│  │  │beforeAddLiquidity│  │   afterSwap      │      │   │
-│  │  │                  │  │                  │      │   │
-│  │  │ - Validate data  │  │ - Get price      │      │   │
-│  │  │ - Store position │  │ - Calc IL        │      │   │
-│  │  │ - Emit event     │  │ - FHE compare    │      │   │
-│  │  │                  │  │ - Withdraw       │      │   │
-│  │  └──────────────────┘  └──────────────────┘      │   │
-│  │                                                     │   │
-│  │  ┌─────────────────────────────────────────┐     │   │
-│  │  │      Position Storage (LPPosition)      │     │   │
-│  │  │  - lpAddress                            │     │   │
-│  │  │  - entryPrice                           │     │   │
-│  │  │  - token0Amount, token1Amount           │     │   │
-│  │  │  - encryptedILThreshold (euint32)      │     │   │
-│  │  │  - isActive                             │     │   │
-│  │  └─────────────────────────────────────────┘     │   │
-│  └────────────────────────────────────────────────────┘   │
+│  ┌────────────────────────────────────────────────────┐     │
+│  │          ILProtectionHook.sol                      │     │
+│  │                                                    │     │
+│  │  ┌──────────────────┐  ┌──────────────────┐        │     │
+│  │  │beforeAddLiquidity│  │   afterSwap      │        │     │
+│  │  │                  │  │                  │        │     │
+│  │  │ - Validate data  │  │ - Get price      │        │     │
+│  │  │ - Store position │  │ - Calc IL        │        │     │
+│  │  │ - Emit event     │  │ - FHE compare    │        │     │
+│  │  │                  │  │ - Withdraw       │        │     │
+│  │  └──────────────────┘  └──────────────────┘        │     │
+│  │                                                    │     │
+│  │  ┌─────────────────────────────────────────┐       │     │
+│  │  │      Position Storage (LPPosition)      │       │     │
+│  │  │  - lpAddress                            │       │     │
+│  │  │  - entryPrice                           │       │     │
+│  │  │  - token0Amount, token1Amount           │       │     │
+│  │  │  - encryptedILThreshold (euint32)       │       │     │
+│  │  │  - isActive                             │       │     │
+│  │  └─────────────────────────────────────────┘       │     │
+│  └────────────────────────────────────────────────────┘     │
 │                                                             │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │         ILCalculator.sol (Library)                  │   │
-│  │  - calculateIL()                                   │   │
-│  │  - getCurrentPrice()                               │   │
-│  │  - getPositionValue()                              │   │
-│  └────────────────────────────────────────────────────┘   │
+│  ┌────────────────────────────────────────────────────┐     │
+│  │  - calculateIL()                                   │     │
+│  │  - getCurrentPrice()                               │     │
+│  │  - getPositionValue()                              │     │
+│  └────────────────────────────────────────────────────┘     │
 │                                                             │
-│  ┌────────────────────────────────────────────────────┐   │
-│  │         FHEManager.sol (Library)                    │   │
-│  │  - encryptValue()                                  │   │
-│  │  - compareThresholds()                             │   │
-│  │  - enforceCondition()                              │   │
-│  └────────────────────────────────────────────────────┘   │
+│  ┌────────────────────────────────────────────────────┐     │
+│  │         FHEManager.sol (Library)                   │     │
+│  │  - encryptValue()                                  │     │
+│  │  - compareThresholds()                             │     │
+│  │  - enforceCondition()                              │     │
+│  └────────────────────────────────────────────────────┘     │
 └─────────────────────────────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │            Fhenix FHE Protocol Layer                        │
 │  - Homomorphic encryption/decryption                        │
-│  - FHE.gt(), FHE.asEuint32(), FHE.req()                    │
+│  - FHE.gt(), FHE.asEuint32(), FHE.req()                     │
 │  - Privacy-preserving computation                           │
 └─────────────────────────────────────────────────────────────┘
 ```

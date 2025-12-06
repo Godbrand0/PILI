@@ -2,5 +2,18 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+solc_version = "0.8.26"
+evm_version = "cancun"
+ffi = true
+code_size_limit = 40000
+optimizer = true
+optimizer_runs = 1000
+via_ir = false
+
+[profile.default.fuzz]
+runs = 256
+
+[rpc_endpoints]
+sepolia = "${SEPOLIA_RPC_URL}"
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
