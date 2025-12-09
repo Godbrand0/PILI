@@ -7,7 +7,9 @@
     "lib": "lib"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "hardhat test",
+    "compile": "hardhat compile",
+    "test:fhe": "hardhat test test/FHEManagerTestContract.test.js"
   },
   "keywords": [],
   "author": "",
@@ -16,5 +18,10 @@
   "dependencies": {
     "@fhenixprotocol/contracts": "^0.3.1",
     "fhenixjs": "^0.4.1"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "dotenv": "^17.2.3",
+    "hardhat": "^3.0.17"
   }
 }
