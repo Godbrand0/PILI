@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {euint32, euint256, ebool} from "@fhenixprotocol/contracts/FHE.sol";
+
 /// @title ILPPosition
 /// @notice Interface and data structures for IL-protected liquidity positions
 /// @dev Used by ILProtectionHook to manage LP positions with encrypted IL thresholds
-
-/// @notice Encrypted 32-bit unsigned integer type from Fhenix FHE
-/// @dev Placeholder type - actual euint32 will be provided by Fhenix SDK integration (Dev 2)
-type euint32 is uint256;
 
 /// @notice Position data for IL-protected liquidity
 /// @dev Optimized storage layout: address + bool + uint96 packed in one slot

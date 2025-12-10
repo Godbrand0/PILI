@@ -9,10 +9,6 @@ remappings = [
     "v4-core/=lib/v4-core/src/",
     "v4-periphery/=lib/v4-periphery/src/"
 ]
-
-[rpc_endpoints]
-fhenix = "${FHENIX_RPC_URL}"
-libs = ["lib"]
 solc_version = "0.8.26"
 evm_version = "cancun"
 ffi = true
@@ -21,10 +17,11 @@ optimizer = true
 optimizer_runs = 1000
 via_ir = false
 
+[rpc_endpoints]
+fhenix = "${FHENIX_RPC_URL}"
+sepolia = "${SEPOLIA_RPC_URL}"
+
 [profile.default.fuzz]
 runs = 256
-
-[rpc_endpoints]
-sepolia = "${SEPOLIA_RPC_URL}"
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
