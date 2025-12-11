@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {Script} from "forge-std/Script.sol";
+import {Script, console} from "forge-std/Script.sol";
 import {ILProtectionHook} from "../src/ILProtectionHook.sol";
+import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 
 contract DeployScript is Script {
     function run() external {
@@ -16,7 +17,7 @@ contract DeployScript is Script {
         vm.startBroadcast(deployerPrivateKey);
         
         // Deploy ILProtectionHook
-        ILProtectionHook hook = new ILProtectionHook(poolManager);
+        ILProtectionHook hook = new ILProtectionHook(IPoolManager(poolManager));
         
         // Log deployment info
         console.log("ILProtectionHook deployed at:", address(hook));

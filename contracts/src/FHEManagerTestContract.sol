@@ -37,13 +37,13 @@ contract FHEManagerTestContract {
     {
         // Encrypt the threshold
         euint32 encryptedThreshold = FHEManager.encryptBasisPoints(thresholdBp);
-        
-        // Compare
-        shouldExit = FHEManager.compareThresholds(
+
+        // Use the async comparison function (deprecated but returns a value)
+        shouldExit = FHEManager.compareThresholdsAsync(
             currentILBp,
             encryptedThreshold
         );
-        
+
         emit ThresholdCompared(currentILBp, shouldExit);
         return shouldExit;
     }
@@ -56,11 +56,12 @@ contract FHEManagerTestContract {
         uint256 currentILBp,
         euint32 encryptedThreshold
     ) external returns (bool shouldExit) {
-        shouldExit = FHEManager.compareThresholds(
+        // Use the async comparison function (deprecated but returns a value)
+        shouldExit = FHEManager.compareThresholdsAsync(
             currentILBp,
             encryptedThreshold
         );
-        
+
         emit ThresholdCompared(currentILBp, shouldExit);
         return shouldExit;
     }

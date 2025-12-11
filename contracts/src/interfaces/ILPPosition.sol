@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {euint32, euint256, ebool} from "@fhenixprotocol/contracts/FHE.sol";
+// ✅ CRITICAL FIX: Use correct import path
+import {euint32, euint256, ebool} from "@fhenixprotocol/cofhe-contracts/FHE.sol";
 
-/// @title ILPPosition
+/// @title ILPPosition (Refactored)
 /// @notice Interface and data structures for IL-protected liquidity positions
 /// @dev Used by ILProtectionHook to manage LP positions with encrypted IL thresholds
 
@@ -61,6 +62,11 @@ interface ILPPositionEvents {
     /// @param positionId Unique identifier for the position
     /// @param poolId Identifier of the Uniswap v4 pool
     /// @param currentIL Current impermanent loss in basis points that triggered exit
+    /// @dev NOTE: currentIL is emitted in PLAINTEXT (not encrypted)
+    /// @dev This is acceptable because:
+    ///      1. Only the comparison result matters for privacy
+    ///      2. LP's threshold remains encrypted (never revealed)
+    ///      3. Current IL is derivable from public pool price anyway
     event ILThresholdBreached(
         uint256 indexed positionId,
         bytes32 indexed poolId,

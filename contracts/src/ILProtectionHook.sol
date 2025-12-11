@@ -9,16 +9,18 @@ import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/types/PoolId.sol";
 import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/types/BeforeSwapDelta.sol";
-import {ModifyLiquidityParams, SwapParams} from "v4-core/types/PoolOperation.sol";
+
+// Import FHE library with CORRECT path
+import {FHE, euint32, ebool} from "@fhenixprotocol/cofhe-contracts/FHE.sol";
 
 // Import your libraries
 import {ILCalculator} from "./libraries/ILCalculator.sol";
-import {FHEManager} from "./libraries/FHEManager.sol";
-import {LPPosition, ILPPositionEvents, euint32} from "./interfaces/ILPPosition.sol";
+import {FHEManager} from "./FHEManager.sol";
+import {LPPosition, ILPPositionEvents} from "./interfaces/ILPPosition.sol";
 
-/// @title IL Protection Hook
+/// @title IL Protection Hook (FHE-Refactored)
 /// @notice Provides Impermanent Loss protection for Uniswap v4 LPs using FHE
-/// @dev Follows official v4-template BaseHook pattern with internal _functions
+/// @dev Follows Fhenix FHE best practices with proper access control
 contract ILProtectionHook is BaseHook, ILPPositionEvents {
     using PoolIdLibrary for PoolKey;
 
@@ -27,12 +29,19 @@ contract ILProtectionHook is BaseHook, ILPPositionEvents {
     mapping(PoolId => uint256[]) public activePositionIds;
     mapping(address => uint256[]) public userPositions;
     mapping(PoolId => bool) public enabledPools;
-    
+
     uint256 public nextPositionId = 1;
     uint256 public totalProtectedLiquidity;
     bool public paused;
     address public owner;
     
+    // FHE Manager contract instance
+    FHEManager public fheVerifier;
+
+    // ✅ FHE CONSTANTS (Gas Optimization)
+    euint32 private ENCRYPTED_ZERO;
+    euint32 private ENCRYPTED_MAX_BP; // 10000 basis points = 100%
+
     // ============ EVENTS ============
     event PoolEnabled(PoolId indexed poolId);
     event ProtectionTriggered(uint256 indexed positionId, uint256 ilAmount);
@@ -40,6 +49,7 @@ contract ILProtectionHook is BaseHook, ILPPositionEvents {
     // ============ ERRORS ============
     error ContractPaused();
     error Unauthorized();
+    error InvalidEncryptedThreshold();
 
     // ============ MODIFIERS ============
     modifier onlyOwner() {
@@ -50,14 +60,25 @@ contract ILProtectionHook is BaseHook, ILPPositionEvents {
     // ============ CONSTRUCTOR ============
     constructor(IPoolManager _poolManager) BaseHook(_poolManager) {
         owner = msg.sender;
+        
+        // Deploy FHE Manager contract
+        fheVerifier = new FHEManager();
+
+        // ✅ Initialize encrypted constants
+        ENCRYPTED_ZERO = FHE.asEuint32(0);
+        ENCRYPTED_MAX_BP = FHE.asEuint32(10000);
+
+        // ✅ CRITICAL: Grant contract access to constants
+        FHE.allowThis(ENCRYPTED_ZERO);
+        FHE.allowThis(ENCRYPTED_MAX_BP);
     }
 
     // ============ HOOK PERMISSIONS ============
-    function getHookPermissions() 
-        public 
-        pure 
-        override 
-        returns (Hooks.Permissions memory) 
+    function getHookPermissions()
+        public
+        pure
+        override
+        returns (Hooks.Permissions memory)
     {
         return Hooks.Permissions({
             beforeInitialize: false,
@@ -79,10 +100,10 @@ contract ILProtectionHook is BaseHook, ILPPositionEvents {
 
     // ============ INTERNAL HOOK IMPLEMENTATIONS ============
 
-    function _afterInitialize(address, PoolKey calldata key, uint160, int24) 
-        internal 
-        override 
-        returns (bytes4) 
+    function _afterInitialize(address, PoolKey calldata key, uint160, int24)
+        internal
+        override
+        returns (bytes4)
     {
         PoolId poolId = key.toId();
         enabledPools[poolId] = true;
@@ -93,20 +114,36 @@ contract ILProtectionHook is BaseHook, ILPPositionEvents {
     function _afterAddLiquidity(
         address sender,
         PoolKey calldata key,
-        ModifyLiquidityParams calldata params,
+        IPoolManager.ModifyLiquidityParams calldata params,
         BalanceDelta,
         BalanceDelta,
         bytes calldata hookData
     ) internal override returns (bytes4, BalanceDelta) {
         if (paused) revert ContractPaused();
-        
+
         PoolId poolId = key.toId();
-        
+
         if (hookData.length > 0 && enabledPools[poolId]) {
             euint32 encryptedThreshold = abi.decode(hookData, (euint32));
-            
+
+            // ✅ CRITICAL FIX #1: Validate encrypted value
+            // Note: FHE.isInitialized() doesn't exist in current FHE library
+            // We'll check if the value is 0 (uninitialized) instead
+            if (euint32.unwrap(encryptedThreshold) == 0) {
+                revert InvalidEncryptedThreshold();
+            }
+
             uint256 positionId = nextPositionId++;
-            
+
+            // ✅ CRITICAL FIX #2: Grant access BEFORE storing
+            // Contract needs access to use this value in future hooks
+            FHE.allowThis(encryptedThreshold);
+
+            // ✅ CRITICAL FIX #3: Grant LP access to their encrypted threshold
+            // LP needs access to retrieve via getSealedThreshold()
+            FHE.allow(encryptedThreshold, sender);
+
+            // NOW store the position with proper permissions
             positions[poolId][positionId] = LPPosition({
                 lpAddress: sender,
                 isActive: true,
@@ -138,24 +175,28 @@ contract ILProtectionHook is BaseHook, ILPPositionEvents {
     function _beforeRemoveLiquidity(
         address sender,
         PoolKey calldata key,
-        ModifyLiquidityParams calldata,
+        IPoolManager.ModifyLiquidityParams calldata,
         bytes calldata
     ) internal override returns (bytes4) {
         if (paused) revert ContractPaused();
 
         PoolId poolId = key.toId();
         uint256[] memory activeIds = activePositionIds[poolId];
-        
+
         for (uint256 i = 0; i < activeIds.length; i++) {
             LPPosition storage position = positions[poolId][activeIds[i]];
             if (position.lpAddress == sender && position.isActive) {
                 uint256 currentIL = ILCalculator.calculateIL(position.entryPrice, 1e18);
-                bool exceedsThreshold = FHEManager.compareThresholds(currentIL, position.encryptedILThreshold);
-                
-                if (exceedsThreshold) {
+
+                // ✅ CRITICAL FIX #4: Use external FHEManager contract
+                // This now uses try/catch with external call pattern
+                try fheVerifier.requireThresholdBreached(currentIL, position.encryptedILThreshold) {
+                    // Threshold breached, emit event
                     emit ILThresholdBreached(activeIds[i], PoolId.unwrap(poolId), currentIL);
+                } catch {
+                    // Threshold not breached, continue normally
                 }
-                
+
                 position.isActive = false;
                 totalProtectedLiquidity -= position.token0Amount + position.token1Amount;
                 break;
@@ -165,7 +206,7 @@ contract ILProtectionHook is BaseHook, ILPPositionEvents {
         return BaseHook.beforeRemoveLiquidity.selector;
     }
 
-    function _beforeSwap(address, PoolKey calldata key, SwapParams calldata, bytes calldata)
+    function _beforeSwap(address, PoolKey calldata key, IPoolManager.SwapParams calldata, bytes calldata)
         internal
         override
         returns (bytes4, BeforeSwapDelta, uint24)
@@ -174,18 +215,25 @@ contract ILProtectionHook is BaseHook, ILPPositionEvents {
 
         PoolId poolId = key.toId();
         uint256[] memory activeIds = activePositionIds[poolId];
-        
+
+        // Check up to 50 positions per swap (gas limit protection)
         for (uint256 i = 0; i < activeIds.length && i < 50; i++) {
             LPPosition storage position = positions[poolId][activeIds[i]];
             if (!position.isActive) continue;
 
             uint256 currentIL = ILCalculator.calculateIL(position.entryPrice, 1e18);
-            bool shouldExit = FHEManager.compareThresholds(currentIL, position.encryptedILThreshold);
 
-            if (shouldExit) {
+            // ✅ CRITICAL FIX #5: Use try/catch with external FHEManager
+            // If threshold breached, call succeeds and we exit position
+            // If threshold NOT breached, call reverts and we catch it
+            try fheVerifier.requireThresholdBreached(currentIL, position.encryptedILThreshold) {
+                // Threshold breached - trigger protection
                 position.isActive = false;
                 emit ILThresholdBreached(activeIds[i], PoolId.unwrap(poolId), currentIL);
                 emit ProtectionTriggered(activeIds[i], currentIL);
+            } catch {
+                // Threshold not breached - continue normally
+                // This is the expected case most of the time
             }
         }
 
@@ -193,7 +241,7 @@ contract ILProtectionHook is BaseHook, ILPPositionEvents {
     }
 
     // ============ VIEW FUNCTIONS ============
-    
+
     function getPosition(PoolId poolId, uint256 positionId)
         external
         view
@@ -216,6 +264,24 @@ contract ILProtectionHook is BaseHook, ILPPositionEvents {
 
     function getUserPositions(address user) external view returns (uint256[] memory) {
         return userPositions[user];
+    }
+
+    // ✅ NEW FUNCTION: Allow LPs to retrieve their encrypted threshold
+    /// @notice Get encrypted threshold for LP to decrypt client-side with cofhejs
+    /// @param poolId Pool identifier
+    /// @param positionId Position identifier
+    /// @return Encrypted threshold that only LP can decrypt
+    function getSealedThreshold(
+        PoolId poolId,
+        uint256 positionId
+    ) external view returns (euint32) {
+        LPPosition storage pos = positions[poolId][positionId];
+        require(pos.lpAddress == msg.sender, "Not position owner");
+
+        // Return the encrypted threshold directly
+        // The user will decrypt it using cofhejs on the client side
+        // Access control was granted via FHE.allowSender in afterAddLiquidity
+        return pos.encryptedILThreshold;
     }
 
     // ============ ADMIN FUNCTIONS ============

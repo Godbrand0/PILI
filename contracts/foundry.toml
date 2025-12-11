@@ -3,7 +3,7 @@ src = "src"
 out = "out"
 libs = ["lib", "node_modules"]
 remappings = [
-    "@fhenixprotocol/contracts/=node_modules/@fhenixprotocol/contracts/",
+    "@fhenixprotocol/cofhe-contracts/=node_modules/@fhenixprotocol/cofhe-contracts/",
     "forge-std/=lib/forge-std/src/",
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "v4-core/=lib/v4-core/src/",
@@ -18,8 +18,7 @@ optimizer_runs = 1000
 via_ir = false
 
 [rpc_endpoints]
-fhenix = "${FHENIX_RPC_URL}"
-sepolia = "${SEPOLIA_RPC_URL}"
+fhenix = "https://devnet.fhenix.io"
 
 [profile.default.fuzz]
 runs = 256
