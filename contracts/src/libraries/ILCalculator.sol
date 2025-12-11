@@ -51,7 +51,7 @@ library ILCalculator {
         if (priceRatio > MAX_PRICE_RATIO) revert PriceRatioTooLarge();
 
         // IL formula: 2 * sqrt(priceRatio) / (1 + priceRatio) - 1
-        uint256 sqrtRatio = sqrt(priceRatio * PRECISION);
+        uint256 sqrtRatio = sqrt(priceRatio);
         uint256 numerator = 2 * sqrtRatio;
         uint256 denominator = PRECISION + priceRatio;
 

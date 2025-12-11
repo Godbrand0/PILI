@@ -11,8 +11,9 @@ import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/types/BeforeSwapDelta.sol";
 import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 
-// Import FHE library with CORRECT path
+// Import FHE library with CORRECT path - including InEuint32 for user inputs
 import {FHE, euint32, ebool} from "@fhenixprotocol/cofhe-contracts/FHE.sol";
+import {InEuint32} from "@fhenixprotocol/cofhe-contracts/ICofhe.sol";
 
 // Import your libraries
 import {ILCalculator} from "./libraries/ILCalculator.sol";
@@ -127,18 +128,25 @@ contract ILProtectionHook is BaseHook, ILPPositionEvents {
         PoolId poolId = key.toId();
 
         if (hookData.length > 0 && enabledPools[poolId]) {
-            euint32 encryptedThreshold = abi.decode(hookData, (euint32));
+            // ✅ SECURITY FIX: Accept InEuint32 input type with ZK verification
+            // This ensures:
+            // 1. User authentication (ZK proof verifies the user encrypted this value)
+            // 2. Ciphertext validity (prevents tampering)
+            // 3. Replay attack protection (each encryption is unique)
+            InEuint32 memory inEncryptedThreshold = abi.decode(hookData, (InEuint32));
 
-            // ✅ CRITICAL FIX #1: Validate encrypted value
-            // Note: FHE.isInitialized() doesn't exist in current FHE library
-            // We'll check if the value is 0 (uninitialized) instead
+            // ✅ Convert to euint32 - this validates the ZK proof and authenticates the user
+            // If the proof is invalid, this will revert
+            euint32 encryptedThreshold = FHE.asEuint32(inEncryptedThreshold);
+
+            // ✅ Additional validation: Check if the value is 0 (uninitialized)
             if (euint32.unwrap(encryptedThreshold) == 0) {
                 revert InvalidEncryptedThreshold();
             }
 
             uint256 positionId = nextPositionId++;
 
-            // ✅ CRITICAL FIX #2: Grant access BEFORE storing
+            // ✅ Grant access BEFORE storing
             // Contract needs access to use this value in future hooks
             // LP needs access to retrieve via getSealedThreshold()
             fheVerifier.grantAccess(encryptedThreshold, sender);

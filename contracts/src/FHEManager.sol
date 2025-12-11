@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-// ✅ CRITICAL FIX: Use correct import path
+// ✅ CRITICAL FIX: Use correct import path - including InEuint32 for user inputs
 import {FHE, euint32, euint256, ebool} from "@fhenixprotocol/cofhe-contracts/FHE.sol";
+import {InEuint32, InEuint256} from "@fhenixprotocol/cofhe-contracts/ICofhe.sol";
 
 /// @title FHEManager (External Contract)
 /// @notice Contract for Fully Homomorphic Encryption operations
@@ -76,8 +77,28 @@ contract FHEManager {
         return isValid;
     }
 
-    /// @notice Encrypt a plaintext basis point value
+    /// @notice Validate and convert encrypted input from user (with ZK proof)
+    /// @dev This is the RECOMMENDED way to accept encrypted thresholds from users
+    /// @dev The ZK proof ensures authentication and prevents replay attacks
+    /// @param inThreshold Encrypted threshold from user (with ZK proof)
+    /// @return threshold Validated encrypted threshold
+    function validateAndConvertThreshold(InEuint32 memory inThreshold)
+        external
+        returns (euint32 threshold)
+    {
+        // Convert input type - this validates the ZK proof automatically
+        // If the proof is invalid or tampered with, this will revert
+        threshold = FHE.asEuint32(inThreshold);
+
+        // Grant access to this contract
+        FHE.allowThis(threshold);
+
+        return threshold;
+    }
+
+    /// @notice Encrypt a plaintext basis point value (DEPRECATED - use client-side encryption)
     /// @dev Converts plaintext basis points to encrypted euint32 using Fhenix FHE
+    /// @dev WARNING: This should only be used for testing. In production, use client-side encryption with fhenixjs
     /// @param basisPoints Value in basis points (e.g., 500 = 5%)
     /// @return encrypted Encrypted value as euint32
     function encryptBasisPoints(uint32 basisPoints)
@@ -92,8 +113,26 @@ contract FHEManager {
         return encrypted;
     }
 
-    /// @notice Encrypt a price value (for future price bounds feature)
+    /// @notice Validate and convert encrypted price input from user (with ZK proof)
+    /// @dev This is the RECOMMENDED way to accept encrypted prices from users
+    /// @param inPrice Encrypted price from user (with ZK proof)
+    /// @return price Validated encrypted price
+    function validateAndConvertPrice(InEuint256 memory inPrice)
+        external
+        returns (euint256 price)
+    {
+        // Convert input type - this validates the ZK proof automatically
+        price = FHE.asEuint256(inPrice);
+
+        // Grant access to this contract
+        FHE.allowThis(price);
+
+        return price;
+    }
+
+    /// @notice Encrypt a price value (DEPRECATED - use client-side encryption)
     /// @dev Uses FHE.asEuint256() for price encryption
+    /// @dev WARNING: This should only be used for testing. In production, use client-side encryption with fhenixjs
     /// @param price Price value to encrypt
     /// @return encrypted Encrypted price
     function encryptPrice(uint256 price)
