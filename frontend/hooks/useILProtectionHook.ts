@@ -189,15 +189,12 @@ export function calculatePositionValue(position: Position, token0Price: bigint, 
  */
 export function calculateImpermanentLossForPosition(
   position: Position,
-  currentToken0Price: bigint,
-  currentToken1Price: bigint
+  currentSqrtPriceX96: bigint
 ): number {
-  // This is a simplified calculation
-  // In production, you'd use the actual Uniswap v4 math
-  const entryValue = Number(formatEther(position.entryPrice));
-  const currentValue = Number(formatEther(currentToken0Price));
-  
-  if (entryValue === 0) return 0;
-  
-  return ((currentValue - entryValue) / entryValue) * 100;
+  // Use the proper IL calculation from utils
+  // The entryPrice is stored as sqrtPriceX96 in the contract
+  return calculateImpermanentLoss(
+    position.entryPrice,
+    currentSqrtPriceX96
+  );
 }

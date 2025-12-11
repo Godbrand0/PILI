@@ -38,7 +38,7 @@ contract FHEManager {
     function requireThresholdBreached(
         uint256 currentILBp,
         euint32 encryptedThreshold
-    ) external pure {
+    ) external {
         if (currentILBp > type(uint32).max) revert InvalidBasisPoints();
 
         // Encrypt current IL
@@ -58,9 +58,8 @@ contract FHEManager {
 
     /// @notice Validate encrypted threshold from client
     /// @dev Validates FHE ciphertext handle using Fhenix isInitialized
-    /// @param encryptedThreshold Encrypted threshold from client
     /// @return isValid Whether the encrypted value is valid
-    function validateEncryptedThreshold(euint32 encryptedThreshold)
+    function validateEncryptedThreshold(euint32)
         external
         pure
         returns (bool isValid)
@@ -83,7 +82,6 @@ contract FHEManager {
     /// @return encrypted Encrypted value as euint32
     function encryptBasisPoints(uint32 basisPoints)
         external
-        pure
         returns (euint32 encrypted)
     {
         if (basisPoints > 10000) revert InvalidBasisPoints();
@@ -100,7 +98,6 @@ contract FHEManager {
     /// @return encrypted Encrypted price
     function encryptPrice(uint256 price)
         external
-        pure
         returns (euint256 encrypted)
     {
         // Encrypt using Fhenix FHE
@@ -129,5 +126,31 @@ contract FHEManager {
         // STUB: Always return true for testing
         // In production: Check if Fhenix protocol is initialized
         return true;
+    }
+
+    /// @notice Get encrypted zero and grant access to a specific address
+    /// @param grantee Address to grant access to
+    /// @return encrypted Encrypted zero value
+    function getEncryptedZeroFor(address grantee) external returns (euint32 encrypted) {
+        encrypted = FHE.asEuint32(0);
+        FHE.allow(encrypted, grantee);
+        return encrypted;
+    }
+
+    /// @notice Get encrypted max basis points (10000) and grant access to a specific address
+    /// @param grantee Address to grant access to
+    /// @return encrypted Encrypted max bp value
+    function getEncryptedMaxBpFor(address grantee) external returns (euint32 encrypted) {
+        encrypted = FHE.asEuint32(10000);
+        FHE.allow(encrypted, grantee);
+        return encrypted;
+    }
+
+    /// @notice Grant access to encrypted value for this contract and a user
+    /// @param encrypted The encrypted value
+    /// @param user The user to grant access to
+    function grantAccess(euint32 encrypted, address user) external {
+        FHE.allowThis(encrypted);
+        FHE.allow(encrypted, user);
     }
 }

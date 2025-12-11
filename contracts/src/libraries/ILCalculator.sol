@@ -6,6 +6,8 @@ pragma solidity ^0.8.24;
 /// @dev Optimized for gas efficiency with custom sqrt implementation
 /// @custom:security-contact security@pili.finance
 
+import {FullMath} from "v4-core/libraries/FullMath.sol";
+
 library ILCalculator {
     /// @notice Precision constant for fixed-point arithmetic
     uint256 constant PRECISION = 1e18;
@@ -27,8 +29,8 @@ library ILCalculator {
     /// @notice Calculate impermanent loss as basis points
     /// @dev IL formula: 2 * sqrt(priceRatio) / (1 + priceRatio) - 1
     /// @dev Returns 0 if no IL (price returned to entry or better for LP)
-    /// @param entryPrice Price when LP deposited (in PRECISION units)
-    /// @param currentPrice Current pool price (in PRECISION units)
+    /// @param entryPrice Price when LP deposited (in sqrtPriceX96 format)
+    /// @param currentPrice Current pool price (in sqrtPriceX96 format)
     /// @return ilBasisPoints IL as basis points (500 = 5%, 1000 = 10%)
     function calculateIL(
         uint256 entryPrice,
@@ -38,11 +40,54 @@ library ILCalculator {
         if (entryPrice < MIN_PRICE) revert InvalidEntryPrice();
         if (currentPrice < MIN_PRICE) revert InvalidCurrentPrice();
 
+        // Convert sqrtPriceX96 to regular price first
+        uint256 entryPriceRegular = sqrtPriceX96ToPrice(uint160(entryPrice));
+        uint256 currentPriceRegular = sqrtPriceX96ToPrice(uint160(currentPrice));
+
         // Calculate price ratio: currentPrice / entryPrice
-        uint256 priceRatio = (currentPrice * PRECISION) / entryPrice;
+        uint256 priceRatio = (currentPriceRegular * PRECISION) / entryPriceRegular;
 
         // Prevent overflow for extreme price changes
         if (priceRatio > MAX_PRICE_RATIO) revert PriceRatioTooLarge();
+
+        // IL formula: 2 * sqrt(priceRatio) / (1 + priceRatio) - 1
+        uint256 sqrtRatio = sqrt(priceRatio * PRECISION);
+        uint256 numerator = 2 * sqrtRatio;
+        uint256 denominator = PRECISION + priceRatio;
+
+        // Result in fixed-point (PRECISION units)
+        uint256 result = (numerator * PRECISION) / denominator;
+
+        // If result < PRECISION, we have IL (negative return)
+        if (result < PRECISION) {
+            uint256 ilPercentage = PRECISION - result;
+            ilBasisPoints = (ilPercentage * BP_DIVISOR) / PRECISION;
+        } else {
+            // No IL (price returned to entry or LP gained)
+            ilBasisPoints = 0;
+        }
+
+        return ilBasisPoints;
+    }
+
+    /// @notice Calculate impermanent loss with logging for debugging
+    /// @dev Same as calculateIL but with additional logging
+    function calculateILWithLogging(
+        uint256 entryPrice,
+        uint256 currentPrice
+    ) internal pure returns (uint256 ilBasisPoints) {
+        // Convert sqrtPriceX96 to regular price first
+        uint256 entryPriceRegular = sqrtPriceX96ToPrice(uint160(entryPrice));
+        uint256 currentPriceRegular = sqrtPriceX96ToPrice(uint160(currentPrice));
+
+        // Calculate price ratio: currentPrice / entryPrice
+        uint256 priceRatio = (currentPriceRegular * PRECISION) / entryPriceRegular;
+
+        // Log intermediate values for debugging
+        // In a real implementation, you'd use console.log or emit events
+        // entryPriceRegular: {entryPriceRegular}
+        // currentPriceRegular: {currentPriceRegular}
+        // priceRatio: {priceRatio}
 
         // IL formula: 2 * sqrt(priceRatio) / (1 + priceRatio) - 1
         uint256 sqrtRatio = sqrt(priceRatio);
@@ -60,6 +105,9 @@ library ILCalculator {
             // No IL (price returned to entry or LP gained)
             ilBasisPoints = 0;
         }
+
+        // Log final result for debugging
+        // ilBasisPoints: {ilBasisPoints}
 
         return ilBasisPoints;
     }
@@ -97,9 +145,12 @@ library ILCalculator {
         //   token0_new = sqrt(k / currentPrice)
         //   token1_new = sqrt(k * currentPrice)
 
-        uint256 kScaled = k * PRECISION;
-        uint256 token0New = sqrt(kScaled / currentPrice);
-        uint256 token1New = sqrt((kScaled * currentPrice) / PRECISION) / PRECISION;
+        // Use FullMath to avoid overflow and handle precision
+        // token0New = sqrt(k * PRECISION / currentPrice)
+        uint256 token0New = sqrt(FullMath.mulDiv(k, PRECISION, currentPrice));
+        
+        // token1New = sqrt(k * currentPrice / PRECISION)
+        uint256 token1New = sqrt(FullMath.mulDiv(k, currentPrice, PRECISION));
 
         // LP value in token1 terms
         lpValue = ((token0New * currentPrice) / PRECISION) + token1New;
@@ -156,10 +207,8 @@ library ILCalculator {
         
         // Calculate sqrtPrice^2 * PRECISION
         // Use assembly for precise arithmetic to avoid overflow
-        assembly {
-            let sqrtPriceSquared := mul(sqrtPrice, sqrtPrice)
-            price := div(mul(sqrtPriceSquared, PRECISION), 0x1000000000000000000000000000000000000000000000000) // 2^192
-        }
+        uint256 sqrtPriceSquared = uint256(sqrtPriceX96) * uint256(sqrtPriceX96);
+        price = FullMath.mulDiv(sqrtPriceSquared, PRECISION, 1 << 192);
         
         return price;
     }

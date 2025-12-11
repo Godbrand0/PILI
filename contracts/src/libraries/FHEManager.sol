@@ -36,7 +36,6 @@ library FHEManager {
     /// @return encrypted Encrypted value as euint32
     function encryptBasisPoints(uint32 basisPoints)
         internal
-        pure
         returns (euint32 encrypted)
     {
         if (basisPoints > 10000) revert InvalidBasisPoints();
@@ -57,7 +56,7 @@ library FHEManager {
     function requireThresholdBreached(
         uint256 currentILBp,
         euint32 encryptedThreshold
-    ) internal pure {
+    ) internal {
         if (currentILBp > type(uint32).max) revert InvalidBasisPoints();
 
         // Encrypt current IL
@@ -87,7 +86,7 @@ library FHEManager {
     function compareThresholdsAsync(
         uint256 currentILBp,
         euint32 encryptedThreshold
-    ) internal pure returns (bool shouldExit) {
+    ) internal returns (bool shouldExit) {
         if (currentILBp > type(uint32).max) revert InvalidBasisPoints();
 
         // Encrypt current IL
@@ -113,7 +112,7 @@ library FHEManager {
     function requestThresholdComparison(
         uint256 currentILBp,
         euint32 encryptedThreshold
-    ) internal pure returns (ebool comparisonHandle) {
+    ) internal returns (ebool comparisonHandle) {
         if (currentILBp > type(uint32).max) revert InvalidBasisPoints();
 
         // Encrypt current IL
@@ -135,7 +134,7 @@ library FHEManager {
     /// @return isReady True if decryption completed
     function getThresholdComparisonResult(ebool comparisonHandle)
         internal
-        pure
+        view
         returns (bool shouldExit, bool isReady)
     {
         // Use safe variant to avoid revert
@@ -145,9 +144,8 @@ library FHEManager {
 
     /// @notice Validate encrypted threshold from client
     /// @dev Validates FHE ciphertext handle using Fhenix isInitialized
-    /// @param encryptedThreshold Encrypted threshold from client
     /// @return isValid Whether the encrypted value is valid
-    function validateEncryptedThreshold(euint32 encryptedThreshold)
+    function validateEncryptedThreshold(euint32)
         internal
         pure
         returns (bool isValid)
@@ -170,7 +168,6 @@ library FHEManager {
     /// @return encrypted Encrypted price
     function encryptPrice(uint256 price)
         internal
-        pure
         returns (euint256 encrypted)
     {
         // Encrypt using Fhenix FHE
@@ -199,13 +196,11 @@ library FHEManager {
         // 3. Implement custom comparison logic using smaller encrypted types
         //
         // For now, revert to prevent usage
-        revert("Price bounds comparison not yet supported for euint256");
-
         // Silence unused variable warnings
-        encryptedCurrentPrice = encryptedCurrentPrice;
-        encryptedUpperBound = encryptedUpperBound;
-        encryptedLowerBound = encryptedLowerBound;
-        isOutOfBounds = false;
+        encryptedCurrentPrice;
+        encryptedUpperBound;
+        encryptedLowerBound;
+        revert("Price bounds comparison not yet supported for euint256");
     }
 
     /// @notice Decrypt an encrypted value (use sparingly!)
@@ -216,7 +211,6 @@ library FHEManager {
     /// @return decrypted Plaintext value
     function decryptValue(euint32 encrypted)
         internal
-        pure
         returns (uint32 decrypted)
     {
         // ❌ WARNING: This is asynchronous!
@@ -255,10 +249,8 @@ library FHEManager {
 
     /// @notice Seal (re-encrypt) an encrypted value for a specific user
     /// @dev Allows LP to retrieve their encrypted threshold using their public key
-    /// @param encrypted The encrypted value to seal
-    /// @param publicKey The user's public key for re-encryption
     /// @return sealedValue The sealed (re-encrypted) value as a string
-    function sealForUser(euint32 encrypted, bytes32 publicKey)
+    function sealForUser(euint32, bytes32)
         internal
         pure
         returns (string memory sealedValue)
@@ -268,7 +260,6 @@ library FHEManager {
         // Note: FHE.sealoutput() doesn't exist in the current FHE library
         // This function is a placeholder for future implementation
         revert("Sealing functionality not yet available in current FHE library version");
-        return sealedValue;
     }
 
     /// @notice Privacy safety check

@@ -15,8 +15,7 @@ import { Button } from "./ui/Button";
 
 interface PositionCardProps {
   position: Position;
-  currentToken0Price?: bigint;
-  currentToken1Price?: bigint;
+  currentSqrtPriceX96?: bigint;
   onWithdraw?: (positionId: bigint) => void;
 }
 
@@ -25,19 +24,23 @@ interface PositionCardProps {
  */
 export function PositionCard({
   position,
-  currentToken0Price = BigInt(0),
-  currentToken1Price = BigInt(0),
+  currentSqrtPriceX96 = BigInt(0),
   onWithdraw,
 }: PositionCardProps) {
+  // For position value calculation, we need regular prices
+  // Convert sqrtPriceX96 to regular price for display
+  const currentPrice = currentSqrtPriceX96 > 0
+    ? BigInt(Math.floor((Number(currentSqrtPriceX96) ** 2 / (2 ** 192)))
+    : BigInt(0);
+  
   const positionValue = calculatePositionValue(
     position,
-    currentToken0Price,
-    currentToken1Price
+    currentPrice,
+    currentPrice // Using same price for both tokens for simplicity
   );
   const impermanentLoss = calculateImpermanentLossForPosition(
     position,
-    currentToken0Price,
-    currentToken1Price
+    currentSqrtPriceX96
   );
 
   const handleWithdraw = () => {

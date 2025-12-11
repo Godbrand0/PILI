@@ -9,6 +9,7 @@ import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/types/PoolId.sol";
 import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/types/BeforeSwapDelta.sol";
+import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 
 // Import FHE library with CORRECT path
 import {FHE, euint32, ebool} from "@fhenixprotocol/cofhe-contracts/FHE.sol";
@@ -58,19 +59,21 @@ contract ILProtectionHook is BaseHook, ILPPositionEvents {
     }
 
     // ============ CONSTRUCTOR ============
-    constructor(IPoolManager _poolManager) BaseHook(_poolManager) {
+    // ============ CONSTRUCTOR ============
+    constructor(IPoolManager _poolManager, address _fheManager) BaseHook(_poolManager) {
         owner = msg.sender;
         
-        // Deploy FHE Manager contract
-        fheVerifier = new FHEManager();
+        // Use provided FHE Manager or deploy new one
+        if (_fheManager != address(0)) {
+            fheVerifier = FHEManager(_fheManager);
+        } else {
+            fheVerifier = new FHEManager();
+        }
 
-        // ✅ Initialize encrypted constants
-        ENCRYPTED_ZERO = FHE.asEuint32(0);
-        ENCRYPTED_MAX_BP = FHE.asEuint32(10000);
-
-        // ✅ CRITICAL: Grant contract access to constants
-        FHE.allowThis(ENCRYPTED_ZERO);
-        FHE.allowThis(ENCRYPTED_MAX_BP);
+        // ✅ Initialize encrypted constants via FHEManager
+        // This avoids direct FHE precompile calls in this contract, enabling testing
+        ENCRYPTED_ZERO = fheVerifier.getEncryptedZeroFor(address(this));
+        ENCRYPTED_MAX_BP = fheVerifier.getEncryptedMaxBpFor(address(this));
     }
 
     // ============ HOOK PERMISSIONS ============
@@ -100,7 +103,7 @@ contract ILProtectionHook is BaseHook, ILPPositionEvents {
 
     // ============ INTERNAL HOOK IMPLEMENTATIONS ============
 
-    function _afterInitialize(address, PoolKey calldata key, uint160, int24)
+    function _afterInitialize(address, PoolKey calldata key, uint160 sqrtPriceX96, int24)
         internal
         override
         returns (bytes4)
@@ -137,18 +140,18 @@ contract ILProtectionHook is BaseHook, ILPPositionEvents {
 
             // ✅ CRITICAL FIX #2: Grant access BEFORE storing
             // Contract needs access to use this value in future hooks
-            FHE.allowThis(encryptedThreshold);
-
-            // ✅ CRITICAL FIX #3: Grant LP access to their encrypted threshold
             // LP needs access to retrieve via getSealedThreshold()
-            FHE.allow(encryptedThreshold, sender);
+            fheVerifier.grantAccess(encryptedThreshold, sender);
+
+            // Get current sqrtPriceX96 from pool state
+            (uint160 currentSqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, poolId);
 
             // NOW store the position with proper permissions
             positions[poolId][positionId] = LPPosition({
                 lpAddress: sender,
                 isActive: true,
                 positionId: uint96(positionId),
-                entryPrice: 1e18,
+                entryPrice: uint256(currentSqrtPriceX96),
                 token0Amount: uint128(uint256(params.liquidityDelta) / 2),
                 token1Amount: uint128(uint256(params.liquidityDelta) / 2),
                 encryptedILThreshold: encryptedThreshold,
@@ -186,7 +189,10 @@ contract ILProtectionHook is BaseHook, ILPPositionEvents {
         for (uint256 i = 0; i < activeIds.length; i++) {
             LPPosition storage position = positions[poolId][activeIds[i]];
             if (position.lpAddress == sender && position.isActive) {
-                uint256 currentIL = ILCalculator.calculateIL(position.entryPrice, 1e18);
+                // Get current sqrtPriceX96 from pool state
+                (uint160 currentSqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, poolId);
+                
+                uint256 currentIL = ILCalculator.calculateIL(position.entryPrice, uint256(currentSqrtPriceX96));
 
                 // ✅ CRITICAL FIX #4: Use external FHEManager contract
                 // This now uses try/catch with external call pattern
@@ -221,7 +227,10 @@ contract ILProtectionHook is BaseHook, ILPPositionEvents {
             LPPosition storage position = positions[poolId][activeIds[i]];
             if (!position.isActive) continue;
 
-            uint256 currentIL = ILCalculator.calculateIL(position.entryPrice, 1e18);
+            // Get current sqrtPriceX96 from pool state
+            (uint160 currentSqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, poolId);
+            
+            uint256 currentIL = ILCalculator.calculateIL(position.entryPrice, uint256(currentSqrtPriceX96));
 
             // ✅ CRITICAL FIX #5: Use try/catch with external FHEManager
             // If threshold breached, call succeeds and we exit position
